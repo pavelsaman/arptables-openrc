@@ -1,0 +1,84 @@
+#!/sbin/openrc-run
+
+extra_commands="save"
+extra_started_commands="reload"
+
+arptables_bin=/usr/bin/arptables-nft
+
+depend() {
+    need localmount
+    before net
+    provide arpfirewall
+}
+
+start_pre() {
+    checkconfig || return 1
+}
+
+start() {
+    ebegin "Loading arptables state and starting filtering"
+    ${arptables_bin}-restore < "${ARPTABLES_SAVE}"
+    eend $?
+}
+
+stop() {
+    if [ "${SAVE_ON_STOP}" = "yes" ]; then
+        save || return 1
+    fi
+
+    local has_errors=0
+    ebegin "Stopping filtering and flushing all rules and policies"
+
+    ${arptables_bin} -F -t filter
+    [ $? -ne 0 ] && has_errors=1
+
+    ${arptables_bin} -X -t filter
+    [ $? -ne 0 ] && has_errors=1
+
+    ${arptables_bin} -P INPUT ACCEPT
+    [ $? -ne 0 ] && has_errors=1
+
+    ${arptables_bin} -P OUTPUT ACCEPT
+    [ $? -ne 0 ] && has_errors=1
+
+    eend ${has_errors}
+}
+
+reload() {
+    local has_errors=0
+
+    ebegin "Flushing all rules and policies"
+    ${arptables_bin} -F -t filter
+    [ $? -ne 0 ] && has_errors=1
+
+    ${arptables_bin} -X -t filter
+    [ $? -ne 0 ] && has_errors=1
+
+    ${arptables_bin} -P INPUT ACCEPT
+    [ $? -ne 0 ] && has_errors=1
+
+    ${arptables_bin} -P OUTPUT ACCEPT
+    [ $? -ne 0 ] && has_errors=1
+
+    echo ${has_errors}
+
+    start
+}
+
+checkconfig() {
+    if [ -z "${ARPTABLES_SAVE}" -o ! -f "${ARPTABLES_SAVE}" ] ; then
+        eerror "Not starting arptables. First create some rules and run:"
+        eerror "/etc/init.d/arptables save"
+        return 1
+    fi
+    return 0
+}
+
+save() {
+    ebegin "Saving arptables state"
+    checkpath -q -d "$(dirname "${ARPTABLES_SAVE}")"
+    checkpath -q -m 0600 -f "${ARPTABLES_SAVE}"
+    ${arptables_bin}-save > "${ARPTABLES_SAVE}"
+    eend $?
+}
+

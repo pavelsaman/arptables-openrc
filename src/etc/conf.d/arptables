@@ -1,0 +1,6 @@
+# path to a file with arptables rules
+ARPTABLES_SAVE=/var/lib/arptables/rules-save
+
+# whether or not to save arptables rules on stopping arptables
+SAVE_ON_STOP="no"
+
